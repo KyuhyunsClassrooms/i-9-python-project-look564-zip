@@ -1,2 +1,4 @@
-# 이 프로젝트는 외부 라이브러리를 사용하지 않습니다.
-# 수업에서 배운 파이썬 기본 문법만 사용하세요.
+# 이 프로젝트는 Anna's Archive API 호출을 위해 requests 라이브러리를 사용합니다.
+# (선생님 허락을 받고 사용)
+# 설치: pip install -r requirements.txt
+requests>=2.31.0
