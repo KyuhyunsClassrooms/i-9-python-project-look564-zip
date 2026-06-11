@@ -11,17 +11,26 @@
 #   3) 출판연도 최신순으로 정렬하고
 #   4) 형식별 권수·평균 평점 같은 통계를 내고
 #   5) 평점과 연도를 점수로 환산해 책 한 권을 추천하고
-#   6) 고른 책의 md5 해시를 Anna's Archive 회원 API로 보내
+#   6) ★한 문장만 말하면, 그 문장에 가장 잘 맞는 "최고의 책"을 골라 주고
+#   7) 고른 책의 md5 해시를 Anna's Archive 회원 API로 보내
 #      실제 다운로드 링크를 받아오는 프로그램이다.
 #
+# [핵심 아이디어]
+#   "복잡한 검색 대신, 그냥 한 문장만 말하면 최고의 책을 추천받는다."
+#   사용자가 "혁신과 인생을 바꾸는 이야기를 읽고 싶어" 라고 입력하면,
+#   각 책의 주제 키워드가 문장에 몇 개 들어 있는지 세어 점수를 매기고,
+#   평점·최신도까지 더해 가장 점수가 높은 책 한 권을 이유와 함께 추천한다.
+#
 # [수행평가 필수 조건과 연결]
-#   - 2차원 리스트  : books (제목·저자·형식·연도·평점·md5)
+#   - 2차원 리스트  : books (제목·저자·형식·연도·평점·md5·키워드)
 #   - 함수 3개 이상 : load_api_key / search_books / filter_by_format /
 #                     sort_by_year / show_statistics / recommend_book /
-#                     print_books / get_download_link / main  (총 9개)
-#   - 조건문        : 메뉴 분기, 검색·필터 판단, 통계 비교, 입력 검사, API 성공/실패
-#   - 반복문        : 메뉴 반복, 책 목록 순회, 통계 집계
-#   - 실행 결과 출력 : 검색·정렬·통계·추천 결과와 다운로드 링크
+#                     recommend_by_sentence / print_books /
+#                     get_download_link / main  (총 10개)
+#   - 조건문        : 메뉴 분기, 검색·필터 판단, 통계 비교, 키워드 일치,
+#                     점수 비교, 입력 검사, API 성공/실패
+#   - 반복문        : 메뉴 반복, 책 목록 순회, 키워드 순회, 통계 집계
+#   - 실행 결과 출력 : 검색·정렬·통계·추천·문장추천 결과와 다운로드 링크
 # ============================================================
 
 import os
@@ -41,13 +50,34 @@ import os
 #              https://annas-archive.org/md5/XXXX... 가 된다.
 #              그 뒤 32자리(영문 소문자+숫자)를 복사해 붙여넣으면
 #              다운로드 기능이 동작한다. 아직 안 넣었으면 다운로드만 안 된다.
+#   6번 열: 주제 키워드(문자열) - 띄어쓰기로 구분.
+#           -> "한 문장으로 추천받기" 에서 이 키워드가 사용자의 문장 안에
+#              몇 개 들어 있는지 세어 책을 추천하는 데 쓴다.
 books = [
-    ["1984",                 "George Orwell",       "EPUB", 2009, 4.7, "md5_here"],
-    ["Pride and Prejudice",  "Jane Austen",         "EPUB", 2008, 4.5, "md5_here"],
-    ["The Great Gatsby",     "F. Scott Fitzgerald", "PDF",  2021, 4.2, "md5_here"],
-    ["Hamlet",               "William Shakespeare", "PDF",  2000, 4.0, "md5_here"],
-    ["Frankenstein",         "Mary Shelley",        "EPUB", 1993, 3.9, "md5_here"],
-    ["The Old Man and the Sea", "Ernest Hemingway", "PDF",  2002, 4.3, "md5_here"],
+    ["1984",                    "George Orwell",       "EPUB", 2009, 4.7, "md5_here",
+     "디스토피아 감시 자유 정치 통제 미래 사회 권력"],
+    ["Pride and Prejudice",     "Jane Austen",         "EPUB", 2008, 4.5, "md5_here",
+     "사랑 로맨스 결혼 가족 고전 연애 관계"],
+    ["The Great Gatsby",        "F. Scott Fitzgerald", "PDF",  2021, 4.2, "md5_here",
+     "사랑 욕망 부 성공 아메리칸드림 비극 고전"],
+    ["Hamlet",                  "William Shakespeare", "PDF",  2000, 4.0, "md5_here",
+     "복수 비극 인간 고뇌 고전 희곡 죽음"],
+    ["Frankenstein",            "Mary Shelley",        "EPUB", 1993, 3.9, "md5_here",
+     "과학 괴물 창조 공포 인간 윤리 생명"],
+    ["The Old Man and the Sea", "Ernest Hemingway",    "PDF",  2002, 4.3, "md5_here",
+     "도전 인내 바다 인생 용기 노인 의지"],
+    ["Steve Jobs",              "Walter Isaacson",     "EPUB", 2011, 4.6, "md5_here",
+     "혁신 창업 리더십 기술 인생 도전 성공 애플 자서전 변화"],
+    ["Atomic Habits",           "James Clear",         "EPUB", 2018, 4.7, "md5_here",
+     "습관 자기계발 성공 변화 목표 동기 성장 인생"],
+    ["Sapiens",                 "Yuval Noah Harari",   "PDF",  2015, 4.6, "md5_here",
+     "역사 인류 문명 과학 미래 통찰 사회"],
+    ["The Little Prince",       "Antoine de Saint-Exupery", "EPUB", 2000, 4.8, "md5_here",
+     "사랑 우정 어린이 철학 인생 동화 순수"],
+    ["Thinking, Fast and Slow", "Daniel Kahneman",     "PDF",  2011, 4.4, "md5_here",
+     "심리 사고 결정 행동 경제 통찰 뇌"],
+    ["Harry Potter",            "J. K. Rowling",       "EPUB", 2014, 4.7, "md5_here",
+     "마법 모험 판타지 우정 성장 학교 친구"],
 ]
 
 # Anna's Archive 다운로드 API 주소
@@ -144,6 +174,36 @@ def recommend_book(data):
     return best_row, round(best_score, 2)
 
 
+def recommend_by_sentence(data, sentence):
+    """★핵심 기능★ 사용자가 말한 '한 문장'과 가장 잘 맞는 책 한 권을 골라 준다.
+
+    점수 = (문장에 들어 있는 책 키워드 수) * 3 + 평점 + (출판연도 - 2000) * 0.02
+      -> 문장과 주제가 많이 겹칠수록(키워드 일치) 크게 가점,
+         그다음 평점, 마지막으로 최신도를 약간 반영한다.
+    돌려주는 값: (가장 잘 맞는 책 행, 점수, 맞은 키워드 목록)"""
+    if len(data) == 0:                              # 조건문: 책이 없을 때
+        return None
+
+    sentence = sentence.lower()
+    best_row = data[0]
+    best_score = -1.0
+    best_hits = []
+
+    for row in data:                                # 반복문: 모든 책을 평가
+        keywords = row[6].lower().split()           # 6번 열(키워드)을 단어로 나눔
+        hits = []
+        for keyword in keywords:                    # 반복문: 키워드 하나씩 확인
+            if keyword in sentence:                 # 조건문: 문장에 키워드가 있나?
+                hits.append(keyword)
+        score = len(hits) * 3 + row[4] + (row[3] - 2000) * 0.02
+        if score > best_score:                      # 조건문: 최고 점수 갱신
+            best_score = score
+            best_row = row
+            best_hits = hits
+
+    return best_row, round(best_score, 2), best_hits
+
+
 def print_books(data):
     """책 목록을 번호와 함께 보기 좋게 출력한다."""
     if len(data) == 0:                              # 조건문: 결과 없음
@@ -199,8 +259,9 @@ def main():
         print("2. 형식으로 거르기 (EPUB/PDF)")
         print("3. 최신순 정렬해서 보기")
         print("4. 통계 보기")
-        print("5. 책 추천 받기")
-        print("6. 다운로드 링크 받기")
+        print("5. 책 추천 받기 (평점 기준)")
+        print("6. ★ 한 문장으로 최고의 책 추천받기 ★")
+        print("7. 다운로드 링크 받기")
         print("0. 종료")
 
         choice = input("메뉴 번호를 입력하세요: ")
@@ -228,6 +289,22 @@ def main():
                 print(f"오늘의 추천: {book[0]} (점수 {score})")
 
         elif choice == "6":
+            print("어떤 책을 읽고 싶은지 한 문장으로 말해 보세요.")
+            print("예) 혁신과 인생을 바꾸는 이야기를 읽고 싶어")
+            sentence = input("문장: ")
+            result = recommend_by_sentence(books, sentence)
+            if result is None:                      # 조건문: 책이 없을 때
+                print("추천할 책이 없습니다.")
+            else:
+                book, score, hits = result
+                print(f"\n📖 당신에게 가장 잘 맞는 책: {book[0]} / {book[1]}")
+                if len(hits) > 0:                   # 조건문: 맞은 키워드가 있을 때
+                    print(f"   추천 이유: 문장에서 '{', '.join(hits)}' 주제가 맞아떨어졌어요.")
+                else:                               # 키워드가 하나도 안 맞으면
+                    print("   딱 맞는 주제어는 없어서, 평점이 가장 높은 책으로 추천했어요.")
+                print(f"   평점 {book[4]} / {book[3]}년 / 추천 점수 {score}")
+
+        elif choice == "7":
             print_books(books)
             answer = input("다운로드할 책 번호(0=취소): ")
             if not answer.isdigit():                # 조건문: 잘못된 입력 처리
@@ -246,7 +323,7 @@ def main():
             break                                   # 반복문 종료
 
         else:
-            print("잘못된 입력입니다. 0~6 중에서 고르세요.")
+            print("잘못된 입력입니다. 0~7 중에서 고르세요.")
 
 
 # ------------------------------------------------------------
