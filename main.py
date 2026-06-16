@@ -55,18 +55,18 @@ def main():
         print("2. 예산으로 추천받기")
         print("3. 종류로 추천받기")
         print("0. 종료")
-        choice = input("메뉴 선택: ")  # 사용자 입력
+        choice = input("메뉴 선택: ").strip()  # 사용자 입력(앞뒤 공백 제거)
 
         if choice == "1":
             show_all()
         elif choice == "2":
-            money = input("예산을 입력하세요(원): ")
-            if money.isdigit():  # 잘못된 입력 처리
+            money = input("예산을 입력하세요(원): ").strip()
+            if money.isdigit():  # 잘못된 입력 처리(숫자인지 확인)
                 recommend_by_budget(int(money))
             else:
                 print("숫자만 입력하세요.")
         elif choice == "3":
-            kind = input("종류 입력(식사/음료/디저트): ")
+            kind = input("종류 입력(식사/음료/디저트): ").strip()
             recommend_by_type(kind)
         elif choice == "0":
             print("프로그램을 종료합니다.")
